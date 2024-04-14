@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import axios from 'axios';
 import { API_BASE_URL } from '../../config'; // 调整路径以正确指向 src 目录
+import { IMAGE_BASE_URL } from '../../config'; // 调整路径以正确指向 src 目录
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 
 const ModelViewer = () => {
@@ -11,7 +12,7 @@ const ModelViewer = () => {
 
     useEffect(() => {
         const loadImages = async () => {
-            const { data } = await axios.get(`${API_BASE_URL}/api/images`);
+            const { data } = await axios.get(`${IMAGE_BASE_URL}/api/images`);
             setImages(data);
         };
 
@@ -46,13 +47,14 @@ const ModelViewer = () => {
         const textureLoader = new THREE.TextureLoader();
         const planeGeometry = new THREE.PlaneGeometry(4, 4);
         images.forEach((img, index) => {
-            textureLoader.load(`${API_BASE_URL}/images/${img}`, (texture) => {
+            textureLoader.load(`${IMAGE_BASE_URL}/images/${img}`, (texture) => {  // 修改这里
                 const planeMaterial = new THREE.MeshBasicMaterial({ map: texture, transparent: true });
                 const planeMesh = new THREE.Mesh(planeGeometry, planeMaterial);
                 planeMesh.position.set(10 * Math.sin(0.5 * index), 0, 10 * Math.cos(0.5 * index));
                 scene.add(planeMesh);
             });
         });
+
 
         // 控制器
         const controls = new OrbitControls(camera, renderer.domElement);
