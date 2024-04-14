@@ -1,7 +1,7 @@
 // src/App.jsx
 import React from 'react';
 import ModelViewer from './components/ModelViewer/ModelViewer';
-import './app.css';
+import './App.css';
 
 function App() {
   return (
