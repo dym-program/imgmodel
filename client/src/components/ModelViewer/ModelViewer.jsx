@@ -6,33 +6,28 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 
 const ModelViewer = () => {
   const mountRef = useRef(null);
-  const sceneRef = useRef(new THREE.Scene()); // 创建一个共享的场景引用
-  const groupRef = useRef(new THREE.Group()); // 创建一个group引用，包含所有图片
+  const sceneRef = useRef(new THREE.Scene()); // 使用一个共享的场景引用
   const [images, setImages] = useState([]);
-  const [isHovering, setIsHovering] = useState(false);
-  const cameraRef = useRef();
-  const rendererRef = useRef();
+  const cameraRef = useRef(new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000));
+  const rendererRef = useRef(new THREE.WebGLRenderer({ antialias: true, alpha: true }));
 
   useEffect(() => {
-    // 初始化基本的 THREE.js 场景元素
-    cameraRef.current = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    rendererRef.current = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     rendererRef.current.setSize(window.innerWidth, window.innerHeight);
     rendererRef.current.setClearColor(0x000000, 0); // 透明背景
     mountRef.current.appendChild(rendererRef.current.domElement);
-
-    const controls = new OrbitControls(cameraRef.current, rendererRef.current.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.25;
-    controls.enableZoom = true;
+    new OrbitControls(cameraRef.current, rendererRef.current.domElement);
 
     cameraRef.current.position.z = 500; // 调整相机位置
 
-    // 灯光设置
-    const ambientLight = new THREE.AmbientLight(0xaaaaaa);
+    const ambientLight = new THREE.AmbientLight(0x404040); // 添加环境光
     sceneRef.current.add(ambientLight);
 
-    // 获取图片数据
+    const spotLight = new THREE.SpotLight(0x9932CC, 1.5, 1000, Math.PI / 4, 0.5, 2);
+    spotLight.position.set(0, 0, 100);
+    spotLight.target.position.set(0, 100, 0);
+    sceneRef.current.add(spotLight);
+    sceneRef.current.add(spotLight.target);
+
     const loadImages = async () => {
       try {
         const response = await axios.get(`${API_BASE_URL}/images`);
@@ -44,95 +39,51 @@ const ModelViewer = () => {
 
     loadImages();
 
-    // 添加group到场景
-    sceneRef.current.add(groupRef.current);
-
-    // 渲染循环
     const animate = () => {
-      if (!isHovering) {
-        groupRef.current.rotation.y += 0.005; // 循环旋转group
-      }
+      sceneRef.current.rotation.y += 0.01; // 添加场景旋转
       rendererRef.current.render(sceneRef.current, cameraRef.current);
       requestAnimationFrame(animate);
     };
 
     animate();
 
-    // 监听窗口大小变化以及清理工作
-    const handleResize = () => {
-      const camera = cameraRef.current;
-      const renderer = rendererRef.current;
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    };
+    window.addEventListener('resize', () => {
+      cameraRef.current.aspect = window.innerWidth / window.innerHeight;
+      cameraRef.current.updateProjectionMatrix();
+      rendererRef.current.setSize(window.innerWidth, window.innerHeight);
+    });
 
-    window.addEventListener('resize', handleResize);
     return () => {
-      window.removeEventListener('resize', handleResize);
       mountRef.current.removeChild(rendererRef.current.domElement);
     };
-  }, [isHovering]); // 添加isHovering作为依赖
+  }, []);
 
   useEffect(() => {
-    const scene = sceneRef.current;
-    const group = groupRef.current;
-    group.children.forEach(child => {
-      scene.remove(child); // 移除旧的图片对象
-    });
     const textureLoader = new THREE.TextureLoader();
-    images.forEach((image, index) => {
-      textureLoader.load(`${IMAGE_BASE_URL}/${image}`, texture => {
+    const radius = 150; // 螺旋的半径
+    let currentHeight = -300; // 初始化高度
+
+    images.forEach((imgSrc, index) => {
+      textureLoader.load(`${IMAGE_BASE_URL}/${imgSrc}`, texture => {
         const aspectRatio = texture.image.height / texture.image.width;
-        const planeGeometry = new THREE.PlaneGeometry(texture.image.width, texture.image.height);
-        const planeMaterial = new THREE.MeshBasicMaterial({ map: texture, transparent: true });
-        const planeMesh = new THREE.Mesh(planeGeometry, planeMaterial);
+        const geometry = new THREE.PlaneGeometry(100 * aspectRatio, 100); // 调整图片的尺寸
+        const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide });
+        const mesh = new THREE.Mesh(geometry, material);
 
-        const scaleRatio = 0.05; // 缩放因子
-        planeMesh.scale.set(scaleRatio, scaleRatio, 1); // 应用缩放
+        const angle = index * 0.5; // 增加旋转间隔
+        mesh.position.x = radius * Math.cos(angle);
+        mesh.position.y = currentHeight; // 增加垂直间距
+        mesh.position.z = radius * Math.sin(angle);
+        currentHeight += 90; // 增加间距值
 
-        const angle = Math.PI * 2 * (index / images.length);
-        const distance = 150; // 调整图片离中心的距离
-        planeMesh.position.x = Math.cos(angle) * distance;
-        planeMesh.position.y = Math.sin(angle) * distance;
-        planeMesh.position.z = index * 0.5; // 轻微分离Z轴以避免渲染冲突
+        mesh.lookAt(cameraRef.current.position); // 使图片始终面向相机
 
-        planeMesh.lookAt(cameraRef.current.position); // 使图片面向相机
-
-        group.add(planeMesh); // 将图片添加到组中
+        sceneRef.current.add(mesh);
       });
     });
-
-    // 添加鼠标悬停事件
-    const raycaster = new THREE.Raycaster();
-    const onMouseMove = (event) => {
-      const mouse = new THREE.Vector2();
-      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-      raycaster.setFromCamera(mouse, cameraRef.current);
-      const intersects = raycaster.intersectObjects(group.children);
-
-      if (intersects.length > 0) {
-        setIsHovering(true);
-      } else {
-        setIsHovering(false);
-      }
-    };
-
-    window.addEventListener('mousemove', onMouseMove);
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove);
-    };
   }, [images]);
 
-  return (
-    <div
-      ref={mountRef}
-      style={{ width: '100%', height: '100vh' }}
-      onMouseEnter={() => setIsHovering(true)}
-      onMouseLeave={() => setIsHovering(false)}
-    />
-  );
+  return <div ref={mountRef} style={{ width: '100%', height: '100vh' }} />;
 };
 
 export default ModelViewer;
