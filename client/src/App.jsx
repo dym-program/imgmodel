@@ -6,9 +6,6 @@ import './App.css';
 function App() {
   return (
     <div className="App">
-      <header className="App-header">
-        宝可梦
-      </header>
       <ModelViewer />
     </div>
   );

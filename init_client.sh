@@ -1,7 +1,7 @@
 ﻿#!/bin/bash
 
 # 定义项目名
-PROJECT_NAME="imgmodel"
+PROJECT_NAME="client"
 
 # 使用 create-react-app 创建项目
 npx create-react-app $PROJECT_NAME
