@@ -8,37 +8,33 @@ const ModelViewer = () => {
   const mountRef = useRef(null);
   const scene = useRef(new THREE.Scene()).current;
   const camera = useRef(new THREE.OrthographicCamera(
-    window.innerWidth / -2, 
-    window.innerWidth / 2, 
-    window.innerHeight / 2, 
-    window.innerHeight / -2, 
-    1, 
+    window.innerWidth / -2,
+    window.innerWidth / 2,
+    window.innerHeight / 2,
+    window.innerHeight / -2,
+    1,
     1000
   )).current;
   const renderer = useRef(new THREE.WebGLRenderer({ antialias: true, alpha: true })).current;
   const [images, setImages] = useState([]);
   const imageGroup = useRef(new THREE.Group());
-  scene.add(imageGroup.current);
-
+  const loadedMeshes = useRef([]);
   useEffect(() => {
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setClearColor(0x000000, 0);
     mountRef.current.appendChild(renderer.domElement);
     new OrbitControls(camera, renderer.domElement);
     camera.position.z = 500;
+    scene.add(imageGroup.current);
 
-    scene.add(new THREE.AmbientLight(0x404040));
-
-    const resizeListener = () => {
+    window.addEventListener('resize', () => {
       camera.left = window.innerWidth / -2;
       camera.right = window.innerWidth / 2;
       camera.top = window.innerHeight / 2;
       camera.bottom = window.innerHeight / -2;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
-    };
-
-    window.addEventListener('resize', resizeListener);
+    });
 
     const loadImages = async () => {
       try {
@@ -53,6 +49,7 @@ const ModelViewer = () => {
 
     const animate = () => {
       requestAnimationFrame(animate);
+      updateImages();
       renderer.render(scene, camera);
       imageGroup.current.rotation.y += 0.005;
     };
@@ -60,7 +57,6 @@ const ModelViewer = () => {
     animate();
 
     return () => {
-      window.removeEventListener('resize', resizeListener);
       mountRef.current.removeChild(renderer.domElement);
     };
   }, []);
@@ -81,10 +77,22 @@ const ModelViewer = () => {
         mesh.position.set(radius * Math.cos(angle), currentHeight, radius * Math.sin(angle));
         currentHeight += 90;
 
+        // 创建点光源，添加光晕效果
+        const light = new THREE.PointLight(0xfffeee, 1.5, 150);
+        light.color.setHSL(Math.random(), 1, 0.5);  // 随机颜色
+        light.position.copy(mesh.position);
+        scene.add(light);
+        loadedMeshes.current.push(mesh);
         imageGroup.current.add(mesh);
       });
     });
   }, [images]);
+
+  const updateImages = () => {
+    loadedMeshes.current.forEach(mesh => {
+      mesh.lookAt(camera.position);
+    });
+  };
 
   return <div ref={mountRef} style={{ width: '100%', height: '100vh' }} />;
 };
