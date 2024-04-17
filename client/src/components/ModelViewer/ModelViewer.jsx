@@ -22,6 +22,8 @@ const ModelViewer = () => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   useEffect(() => {
+    console.log("Component mounted");
+
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setClearColor(0x000000, 0);
     mountRef.current.appendChild(renderer.domElement);
@@ -41,7 +43,12 @@ const ModelViewer = () => {
     const loadImages = async () => {
       try {
         const response = await axios.get(`${API_BASE_URL}/images`);
-        setImages(response.data);
+        if (response.data) {
+          console.log("Images loaded:", response.data); // 确认加载到的数据
+          setImages(response.data);
+        } else {
+          console.error("No data received from images endpoint");
+        }
       } catch (error) {
         console.error('Error fetching images:', error);
       }
@@ -59,65 +66,72 @@ const ModelViewer = () => {
     animate();
 
     return () => {
+      console.log("Component unmounted");
       mountRef.current.removeChild(renderer.domElement);
     };
   }, []);
 
   useEffect(() => {
+    console.log('Images updated, new length:', images.length);
     if (images.length > 0) {
-      loadInitialImages();
+      addImagesToScene(10, -300); // 只有当有图片时才尝试加载场景中的图片
     }
-  }, [images]);
-
-  const loadInitialImages = () => {
-    addImagesToScene(10, -300); // Load first 10 images
-  };
+  }, [images]); // 监听 images 的变化
 
   const addImagesToScene = (count, startHeight) => {
+    if (!images.length) {
+        console.log("No images available to load");
+        return; // 如果没有图片，直接返回
+    }
     const textureLoader = new THREE.TextureLoader();
     const radius = 300;
     let currentHeight = startHeight;
 
     for (let i = 0; i < count; i++) {
-      const imgIndex = (currentImageIndex + i) % images.length;
-      const imgSrc = images[imgIndex];
-      textureLoader.load(`${IMAGE_BASE_URL}/${imgSrc}`, texture => {
-        const aspectRatio = texture.image.height / texture.image.width;
-        const geometry = new THREE.PlaneGeometry(100 * aspectRatio, 100);
-        const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide });
-        const mesh = new THREE.Mesh(geometry, material);
+        const imgIndex = (currentImageIndex + i) % images.length;
+        const imgSrc = images[imgIndex];
+        textureLoader.load(`${IMAGE_BASE_URL}/${imgSrc}`, texture => {
+            const aspectRatio = texture.image.height / texture.image.width;
+            const geometry = new THREE.PlaneGeometry(100 * aspectRatio, 100);
+            const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide });
+            const mesh = new THREE.Mesh(geometry, material);
 
-        const angle = (currentImageIndex + i) * 0.5;
-        mesh.position.set(radius * Math.cos(angle), currentHeight, radius * Math.sin(angle));
-        currentHeight += 90;
+            const angle = (currentImageIndex + i) * 0.5;
+            mesh.position.set(radius * Math.cos(angle), currentHeight, radius * Math.sin(angle));
+            currentHeight += 90;
 
-        imageGroup.current.add(mesh);
-        activeMeshes.current.push(mesh);
-      });
+            imageGroup.current.add(mesh);
+            activeMeshes.current.push(mesh);
+        });
     }
 
-    setCurrentImageIndex(prev => (prev + count) % images.length); // Update index to load new images next time
-  };
+    setCurrentImageIndex(prev => (prev + count) % images.length);
+};
+
 
   const updateImages = () => {
-    const moveStep = 2;
+    const moveStep = 2; // 图片每帧移动的步长
     activeMeshes.current.forEach(mesh => {
-      mesh.position.y += moveStep;
-      mesh.lookAt(camera.position);
+      mesh.position.y += moveStep; // 向上移动图片
+      mesh.lookAt(camera.position); // 确保图片始终面向相机
     });
-
-    // Remove meshes that have moved too far
-    while (activeMeshes.current.length && activeMeshes.current[0].position.y > 500) {
-      const meshToRemove = activeMeshes.current.shift();
-      imageGroup.current.remove(meshToRemove);
+  
+    // 检查并移除超出视界的图片
+    if (activeMeshes.current.length > 0 && activeMeshes.current[activeMeshes.current.length - 1].position.y > window.innerHeight / 2) {
+      const meshToRemove = activeMeshes.current.pop(); // 移除数组中的最后一个元素，即最顶部的元素
+      imageGroup.current.remove(meshToRemove); // 从场景中移除该元素
     }
-
-    // Load new images if needed
-    if (activeMeshes.current.length < 10 && images.length > 10) {
-      const nextImageIndex = activeMeshes.current.length;
-      addImagesToScene(1, -300); // Always add at the starting height
+  
+    // 如果当前激活的图片少于10张，并且有足够的图片可以加载，则继续加载新图片
+    if (activeMeshes.current.length < 10) {
+      const neededImages = 10 - activeMeshes.current.length; // 计算需要加载的图片数量
+      const nextImageIndex = (currentImageIndex + activeMeshes.current.length) % images.length; // 计算下一个图片的索引
+      const startPositionY = activeMeshes.current.length > 0 ? activeMeshes.current[activeMeshes.current.length - 1].position.y + 90 : -300; // 计算新图片的起始位置
+      addImagesToScene(neededImages, startPositionY);
     }
   };
+  
+  
 
   return <div ref={mountRef} style={{ width: '100%', height: '100vh' }} />;
 };
