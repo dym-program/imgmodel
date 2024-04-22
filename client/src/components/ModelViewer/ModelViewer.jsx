@@ -5,7 +5,6 @@ import { IMAGE_BASE_URL, API_BASE_URL } from '../../config';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 
 const ModelViewer = () => {
-  const lastUpdateTime = useRef(Date.now());
   const mountRef = useRef(null);
   const scene = useRef(new THREE.Scene()).current;
   const camera = useRef(new THREE.OrthographicCamera(window.innerWidth / -2, window.innerWidth / 2, window.innerHeight / 2, window.innerHeight / -2, 1, 1000)).current;
@@ -15,47 +14,7 @@ const ModelViewer = () => {
   const activeMeshes = useRef([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
-
-  const loadImages = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const response = await axios.get(`${API_BASE_URL}/images`);
-      setImages(response.data || []);
-    } catch (error) {
-      console.error('Error fetching images:', error);
-    }
-    setIsLoading(false);
-  }, []);
-
-  useEffect(() => {
-    loadImages(); // Load images once on component mount
-  }, [loadImages]);
-
-  const updateImages = useCallback(() => {
-    const now = Date.now();
-    const updateInterval = 2000; // 增加更新间隔
-    const moveStep = 0.05; // Adjust the speed of animation
-    if (now - lastUpdateTime.current > updateInterval) {
-      activeMeshes.current.forEach(mesh => {
-        mesh.position.y += moveStep;
-        mesh.lookAt(camera.position);
-      });
-
-      lastUpdateTime.current = now;
-    }
-    
-
-    if (activeMeshes.current.length > 0  && activeMeshes.current[activeMeshes.current.length - 1].position.y > window.innerHeight / 2){
-      const meshToRemove = activeMeshes.current.shift();
-      imageGroup.current.remove(meshToRemove);
-    }
-
-    if (activeMeshes.current.length < 10 && !isLoading && images.length > 10) {
-      const neededImages = 10 - activeMeshes.current.length;
-      const startPositionY = activeMeshes.current.length > 0 ? activeMeshes.current[activeMeshes.current.length - 1].position.y + 100 : -300;
-      addImagesToScene(neededImages, startPositionY);
-    }
-  }, [images, currentImageIndex, isLoading]);
+  const lastRenderTime = useRef(Date.now());
 
   useEffect(() => {
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -74,11 +33,28 @@ const ModelViewer = () => {
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
+    const loadImages = async () => {
+      setIsLoading(true);
+      try {
+        const response = await axios.get(`${API_BASE_URL}/images`);
+        setImages(response.data || []);
+      } catch (error) {
+        console.error('Error fetching images:', error);
+      }
+      setIsLoading(false);
+    };
+
+    loadImages(); // Only called once on component mount
+
     const animate = () => {
+      const now = Date.now();
+      if (now - lastRenderTime.current > 50) { // Control the update rate to 20 fps
+        updateImages();
+        lastRenderTime.current = now;
+      }
       requestAnimationFrame(animate);
-      updateImages();
       renderer.render(scene, camera);
-      imageGroup.current.rotation.y += 0.005;
+      imageGroup.current.rotation.y += 0.001;
     };
 
     animate();
@@ -86,13 +62,29 @@ const ModelViewer = () => {
     return () => {
       mountRef.current.removeChild(renderer.domElement);
     };
-  }, [updateImages]);
+  }, []);
+
+  const updateImages = () => {
+    const moveStep = 0.5; // Adjust movement speed
+    activeMeshes.current.forEach(mesh => {
+      mesh.position.y += moveStep;
+      mesh.lookAt(camera.position);
+    });
+
+    while (activeMeshes.current.length && activeMeshes.current[0].position.y > window.innerHeight / 2) {
+      const meshToRemove = activeMeshes.current.shift();
+      imageGroup.current.remove(meshToRemove);
+    }
+
+    if (activeMeshes.current.length < 10 && !isLoading && images.length > 10) {
+      const neededImages = 10 - activeMeshes.current.length;
+      const startPositionY = activeMeshes.current.length > 0 ? activeMeshes.current[activeMeshes.current.length - 1].position.y + 100 : -300;
+      addImagesToScene(neededImages, startPositionY);
+    }
+  };
 
   const addImagesToScene = (count, startHeight) => {
-    if (!images.length) {
-      console.log("No images available to load");
-      return;
-    }
+    if (!images.length || isLoading) return;
     setIsLoading(true);
     const textureLoader = new THREE.TextureLoader();
     const radius = 300;
