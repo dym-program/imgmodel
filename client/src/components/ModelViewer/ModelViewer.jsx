@@ -65,7 +65,7 @@ const ModelViewer = () => {
   }, []);
 
   const updateImages = () => {
-    const moveStep = 0.5; // Adjust movement speed
+    const moveStep = 0.4; // Adjust movement speed
     activeMeshes.current.forEach(mesh => {
       mesh.position.y += moveStep;
       mesh.lookAt(camera.position);
@@ -87,7 +87,7 @@ const ModelViewer = () => {
     if (!images.length || isLoading) return;
     setIsLoading(true);
     const textureLoader = new THREE.TextureLoader();
-    const radius = 300;
+    const radius = 350;
     let currentHeight = startHeight;
 
     for (let i = 0; i < count; i++) {
@@ -99,7 +99,7 @@ const ModelViewer = () => {
         const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide });
         const mesh = new THREE.Mesh(geometry, material);
 
-        const angle = (currentImageIndex + i) * 0.5;
+        const angle = (currentImageIndex + i) * 0.4;
         mesh.position.set(radius * Math.cos(angle), currentHeight, radius * Math.sin(angle));
         currentHeight += 100;
 
