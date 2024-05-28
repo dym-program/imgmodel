@@ -2,8 +2,12 @@
 
 # 创建后端目录结构
 mkdir -p backend/src/routes
+
 mkdir -p backend/public/images
+
 mkdir -p backend/public/models
+
+
 
 # 创建文件
 echo "const express = require('express');
